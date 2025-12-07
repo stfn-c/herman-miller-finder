@@ -41,7 +41,7 @@ parser.add_argument('--prod', action='store_true', help='Production mode (slower
 parser.add_argument('--dev', action='store_true', help='Dev mode (faster delays, default)')
 parser.add_argument('--verbose', '-v', action='store_true', help='Verbose logging')
 parser.add_argument('--quiet', '-q', action='store_true', help='Minimal logging')
-parser.add_argument('--count', '-n', type=int, default=20, help='Number of listings to check (default: 20)')
+parser.add_argument('--count', '-n', type=int, default=None, help='Number of listings to check (default: from env or 20)')
 parser.add_argument('--scheduler', action='store_true', help='Run as scheduler (12x/day, 9am-2am local time)')
 args = parser.parse_args()
 
@@ -50,7 +50,7 @@ DEV_MODE = not args.prod  # Default to dev mode unless --prod specified
 VERBOSE_LOGGING = args.verbose or (not args.quiet)  # Verbose by default unless --quiet
 PURE_TEST_MODE = args.test
 BENCHMARK_MODE = args.benchmark
-LISTING_COUNT = args.count
+# LISTING_COUNT set later after env is loaded
 TEST_MODE_CHANCE = 15   # 1 in X chance to trigger test mode during normal run
 
 # Headless mode: auto-detect if no display available (server mode)
@@ -311,10 +311,19 @@ LONGITUDE = float(os.environ.get("LONGITUDE", "0"))
 LOCALE = os.environ.get("LOCALE", "en-US")
 MARKETPLACE_LOCATION = os.environ.get("MARKETPLACE_LOCATION", "melbourne")  # Facebook marketplace city slug
 
-# Scheduler config: 12 runs per day, only during waking hours (9am-2am local time)
-SCHEDULER_RUNS_PER_DAY = 12
-SCHEDULER_START_HOUR = 9   # 9am local
-SCHEDULER_END_HOUR = 26    # 2am next day (26 = 24 + 2)
+# Scheduler config (all configurable via environment)
+SCHEDULER_RUNS_PER_DAY = int(os.environ.get("RUNS_PER_DAY", "12"))
+SCHEDULER_START_HOUR = int(os.environ.get("START_HOUR", "9"))  # 9am local default
+_end_hour = int(os.environ.get("END_HOUR", "2"))  # 2am local default
+SCHEDULER_END_HOUR = _end_hour if _end_hour > 12 else _end_hour + 24  # Handle next-day hours
+
+# Alert settings
+MIN_DEAL_SCORE = float(os.environ.get("MIN_DEAL_SCORE", "0"))  # Minimum score to send alerts (0 = all)
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "70"))  # Minimum AI confidence % to consider
+
+# Scraping settings
+DEFAULT_LISTING_COUNT = int(os.environ.get("LISTING_COUNT", "20"))  # Default listings per run
+LISTING_COUNT = args.count if args.count is not None else DEFAULT_LISTING_COUNT
 
 
 def init_database():
@@ -2284,8 +2293,13 @@ async def main():
 
         await browser.close()
 
-    # Send email alert (only for non-test finds)
+    # Send email alert (only for non-test finds that meet score/confidence thresholds)
     real_finds = [h for h in herman_millers if not h.get('is_test')]
+
+    # Filter by minimum deal score if set
+    if MIN_DEAL_SCORE > 0:
+        real_finds = [h for h in real_finds if (h.get('deal_score') or 0) >= MIN_DEAL_SCORE]
+
     if real_finds:
         print(f"\n📧 Sending email alert for {len(real_finds)} Herman Miller(s)...")
         send_email_alert(real_finds)

@@ -936,7 +936,7 @@ async def run_pure_test_mode():
                 image_base64 = base64.b64encode(img_response.content).decode('utf-8')
                 print(f"     Image size: {len(img_response.content) / 1024:.1f} KB")
 
-                print(f"\n  🤖 Sending to Claude Opus 4.5...")
+                print(f"\n  🤖 Sending to {DEFAULT_MODEL.split('/')[-1]}...")
                 analysis = analyze_image_with_claude(image_base64)
 
                 if analysis:
@@ -2231,7 +2231,7 @@ async def main():
                                 if VERBOSE_LOGGING:
                                     print(f"     Image size: {len(img_response.content) / 1024:.1f} KB")
 
-                                print(f"\n  🤖 Sending to Claude Opus 4.5...")
+                                print(f"\n  🤖 Sending to {DEFAULT_MODEL.split('/')[-1]}...")
                                 analysis = analyze_image_with_claude(image_base64)
 
                                 if analysis:

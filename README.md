@@ -1,140 +1,141 @@
 # Herman Miller Chair Finder
 
-Automatically find Herman Miller chairs on Facebook Marketplace using AI-powered image analysis.
+**Stop overpaying for office chairs.** This tool automatically scans Facebook Marketplace for Herman Miller chairs and alerts you when someone lists one at a good price.
 
-This tool scrapes Facebook Marketplace listings, uses vision-capable LLMs (Claude, GPT-4o, Gemini, etc.) to identify authentic Herman Miller chairs, calculates deal scores based on retail pricing, and sends email alerts for good finds.
+Herman Miller chairs (like the Aeron) retail for $1,500-$2,500 new, but people often sell them used without knowing their value. This tool uses AI to spot them and emails you before they're gone.
 
-## Features
+## What It Does
 
-- **AI-Powered Identification**: Uses Claude Opus 4.5 and other vision models via OpenRouter to analyze chair images
-- **Deal Scoring**: Calculates value based on listing price vs retail (0-10 scale)
-- **Email Alerts**: Sends notifications when high-value Herman Miller chairs are found
-- **Benchmark Mode**: Compare accuracy across 14+ vision models
-- **Scheduler**: Runs 12x daily during waking hours with randomized intervals
-- **Persistent Storage**: SQLite database tracks all analyzed listings
+1. **Scans Facebook Marketplace** - Searches for office chairs in Perth, Australia
+2. **Identifies Herman Miller chairs** - AI looks at each listing photo and determines if it's a genuine Herman Miller
+3. **Calculates the deal quality** - Compares the asking price to retail value
+4. **Sends you an email** - When it finds a good deal, you get notified immediately
 
-## Supported Chair Models
+## How Good Is the Deal?
 
-Aeron, Sayl, Embody, Mirra, Mirra 2, Cosm, Setu, Eames Soft Pad, Eames Aluminum Group, Celle, Lino, Verus, Caper, and more.
+The tool rates every find on a 0-10 scale:
 
-## Installation
+| Score | What It Means | Example |
+|-------|---------------|---------|
+| 10 - FUMBLE | Seller has no idea what they have | $200 Aeron (retails $2,000) |
+| 8-9 - STEAL | Exceptional deal, act fast | $400 Aeron |
+| 6-7 - GREAT | Well below market value | $600 Aeron |
+| 4-5 - GOOD | Solid used price | $900 Aeron |
+| 2-3 - FAIR | Reasonable but not exciting | $1,400 Aeron |
+| 0-1 - PASS | At or above retail | $1,800+ Aeron |
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/herman-miller-finder.git
+## Chairs It Can Identify
+
+Aeron, Embody, Sayl, Mirra, Mirra 2, Cosm, Setu, Eames Soft Pad, Eames Aluminum Group, Celle, Lino, Verus, Caper, and more.
+
+---
+
+## Setup Guide
+
+### What You'll Need
+
+- **A computer with Python installed** (version 3.8 or newer)
+- **An OpenRouter account** - This gives the tool access to AI (free tier available at [openrouter.ai](https://openrouter.ai))
+- **A Resend account** - For sending email alerts (free tier at [resend.com](https://resend.com))
+- **A Facebook account** - The tool browses Marketplace as you
+
+### Step 1: Download the Code
+
+Open Terminal (Mac) or Command Prompt (Windows) and run:
+
+```
+git clone https://github.com/stfn-c/herman-miller-finder.git
 cd herman-miller-finder
+```
 
-# Create virtual environment
+### Step 2: Install Requirements
+
+```
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Install Playwright browsers
 playwright install chromium
 ```
 
-## Configuration
+On Windows, replace `source venv/bin/activate` with `venv\Scripts\activate`
 
-Copy the example environment file and fill in your credentials:
+### Step 3: Set Up Your Credentials
 
-```bash
+Create a file called `.env` (copy from the example):
+
+```
 cp .env.example .env
 ```
 
-Required environment variables:
+Open `.env` in any text editor and fill in:
 
-| Variable | Description |
-|----------|-------------|
-| `OPENROUTER_API_KEYS` | Comma-separated OpenRouter API keys |
-| `RESEND_API_KEY` | Resend.com API key for email notifications |
-| `FROM_EMAIL` | Sender email address (must be verified in Resend) |
-| `TO_EMAIL` | Recipient email for alerts |
-| `FB_COOKIES` | Facebook session cookies as JSON array |
+| Setting | Where to Get It |
+|---------|-----------------|
+| `OPENROUTER_API_KEYS` | [openrouter.ai/keys](https://openrouter.ai/keys) - Create an API key |
+| `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys) - Create an API key |
+| `FROM_EMAIL` | Your sending email (must verify domain in Resend) |
+| `TO_EMAIL` | Where you want alerts sent |
+| `FB_COOKIES` | Your Facebook login session (see below) |
 
-### Getting Facebook Cookies
+### Step 4: Get Your Facebook Cookies
 
-1. Log into Facebook in your browser
-2. Open Developer Tools (F12) → Application → Cookies
-3. Export these cookies: `datr`, `sb`, `c_user`, `xs`, `fr`, `locale`
-4. Format as JSON array (see `.env.example`)
+The tool needs your Facebook login cookies to browse Marketplace. Here's how to get them:
 
-## Usage
+1. Open Chrome and log into Facebook
+2. Press `F12` to open Developer Tools
+3. Click the **Application** tab at the top
+4. In the left sidebar, expand **Cookies** and click `https://www.facebook.com`
+5. Find and copy the values for: `datr`, `sb`, `c_user`, `xs`, `fr`, `locale`
+6. Format them as shown in `.env.example`
 
-```bash
-# Standard run - scrape Facebook and analyze listings
+---
+
+## Running the Tool
+
+### Basic Usage
+
+```
 python find_herman_miller.py
+```
 
-# Test mode - use embedded test images only (no Facebook scraping)
-python find_herman_miller.py --test
+This scans Marketplace once and emails you any Herman Miller chairs it finds.
 
-# Production mode - slower, more human-like delays
-python find_herman_miller.py --prod
+### Run It Automatically
 
-# Dev mode - faster delays (default)
-python find_herman_miller.py --dev
+To have it check throughout the day (12 times, from 9am to 2am):
 
-# Specify number of listings to scrape
-python find_herman_miller.py -n 50
-
-# Verbose or quiet logging
-python find_herman_miller.py --verbose
-python find_herman_miller.py --quiet
-
-# Run as scheduler (12x/day, 9am-2am Perth time)
+```
 python find_herman_miller.py --scheduler
 ```
 
-### Benchmarking
+### Other Options
 
-Compare vision model accuracy:
+| Command | What It Does |
+|---------|--------------|
+| `python find_herman_miller.py --test` | Test with sample images (no Facebook) |
+| `python find_herman_miller.py -n 50` | Check 50 listings instead of default 20 |
+| `python find_herman_miller.py --verbose` | Show detailed progress |
+| `python find_herman_miller.py --benchmark` | Compare different AI models' accuracy |
 
-```bash
-# Run benchmark across all models
-python find_herman_miller.py --benchmark
+---
 
-# List previous benchmark runs
-python find_herman_miller.py --list-benchmarks
+## How It Works (Non-Technical)
 
-# Compare two benchmark runs
-python find_herman_miller.py --compare latest previous
-```
+1. The tool opens an invisible browser and goes to Facebook Marketplace
+2. It searches for terms like "office chair", "ergonomic chair", "mesh chair"
+3. For each listing, it downloads the photo and sends it to an AI
+4. The AI analyzes the image and says "This is a Herman Miller Aeron" or "This is just a generic office chair"
+5. If it's a Herman Miller, the tool calculates if the price is good compared to retail
+6. Good deals get emailed to you with the listing link, photo, and deal score
 
-## Deal Score System
+---
 
-| Score | Label | Price vs Retail |
-|-------|-------|-----------------|
-| 10 | FUMBLE | < 15% |
-| 8-9 | STEAL | 15-25% |
-| 6-7 | GREAT | 25-40% |
-| 4-5 | GOOD | 40-60% |
-| 2-3 | FAIR | 60-80% |
-| 0-1 | RETAIL/OVERPRICED | > 80% |
+## Important Notes
 
-## Output
-
-Found chairs are saved to `found_chairs/`:
-- `found_listings.db` - SQLite database of all analyzed listings
-- `{listing_id}/info.json` - Listing details and AI analysis
-- `{listing_id}/image.jpg` - Downloaded listing image
-- `benchmark_*.html` - Benchmark comparison reports
-
-## Models Tested
-
-The benchmark compares these vision-capable models:
-- Claude Opus 4.5, Claude Sonnet 4, Claude Sonnet 3.5
-- GPT-4o, GPT-4o Mini
-- Gemini 2.5 Pro, Gemini 2.0 Flash
-- Llama 3.2 90B Vision
-- Pixtral Large, Pixtral 12B
-- Qwen 2.5 VL 72B
-- And more...
+- **Location**: Currently configured for Perth, Australia. You can modify the search location in the code.
+- **Facebook's Rules**: Automated browsing may violate Facebook's terms of service. Use at your own discretion.
+- **Cookie Expiry**: Facebook cookies expire periodically. If the tool stops working, you'll need to get fresh cookies.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
-
-## Disclaimer
-
-This tool scrapes Facebook Marketplace, which may violate Facebook's Terms of Service. Use at your own risk and responsibility. The authors are not responsible for any account actions taken by Facebook.
+MIT License - free to use and modify.

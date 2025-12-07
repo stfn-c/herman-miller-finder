@@ -90,25 +90,45 @@ Or copy the contents of `export_cookies.js` and paste that instead - same thing.
 
 ## Usage
 
-### One-time scan
+### Dev mode (default)
+
+Fast scanning, minimal delays. Good for testing:
 
 ```
 python find_herman_miller.py
 ```
 
+### Prod mode
+
+Slower, human-like behavior. Use this for real runs to avoid detection:
+
+```
+python find_herman_miller.py --prod
+```
+
+Prod mode adds:
+- Longer delays between actions
+- More scrolling to load listings
+- Decoy searches (random non-chair searches)
+- Random pauses and mouse movements
+
 ### Run on schedule
 
-Checks throughout the day (default: 12 times, 9am-2am):
+Runs automatically throughout the day. Combine with `--prod` for production:
 
 ```
-python find_herman_miller.py --scheduler
+python find_herman_miller.py --prod --scheduler
 ```
+
+This checks 12x/day (configurable) between 9am-2am in your timezone.
 
 ### Options
 
 | Flag | What it does |
 |------|--------------|
-| `-n 50` | Check 50 listings instead of default |
+| `--prod` | Production mode - slower, human-like delays |
+| `--scheduler` | Run continuously (12x/day by default) |
+| `-n 50` | Check 50 listings instead of default 20 |
 | `--test` | Test mode - uses sample images, no Facebook |
 | `--verbose` | Show detailed output |
 | `--benchmark` | Compare different AI models |

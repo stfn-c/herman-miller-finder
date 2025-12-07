@@ -2304,8 +2304,9 @@ async def main():
 
         await browser.close()
 
-    # Send email alert (only for non-test finds that meet score/confidence thresholds)
-    real_finds = [h for h in herman_millers if not h.get('is_test')]
+    # Send email alert (only for non-test finds unless EMAIL_TEST_FINDS is set)
+    include_test = os.environ.get('EMAIL_TEST_FINDS', '').lower() in ('true', '1', 'yes')
+    real_finds = [h for h in herman_millers if include_test or not h.get('is_test')]
 
     # Filter by minimum deal score if set
     if MIN_DEAL_SCORE > 0:

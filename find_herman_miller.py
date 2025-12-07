@@ -762,9 +762,13 @@ Answer in JSON:
     return {"error": True, "reasoning": "Unknown error", "brand": "Unknown", "model": "None", "is_premium": False}
 
 
+# Default model for analysis (configurable via env)
+DEFAULT_MODEL = os.environ.get("AI_MODEL", "anthropic/claude-opus-4")
+
+
 def analyze_image_with_claude(image_base64):
-    """Wrapper for backwards compatibility - uses Claude Opus 4."""
-    return analyze_image_with_model(image_base64, "anthropic/claude-opus-4")
+    """Wrapper for backwards compatibility - uses configured model."""
+    return analyze_image_with_model(image_base64, DEFAULT_MODEL)
 
 
 def save_herman_miller_listing(listing, analysis, image_data):

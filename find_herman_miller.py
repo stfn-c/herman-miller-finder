@@ -53,14 +53,7 @@ BENCHMARK_MODE = args.benchmark
 # LISTING_COUNT set later after env is loaded
 TEST_MODE_CHANCE = 15   # 1 in X chance to trigger test mode during normal run
 
-# Headless mode: configurable via env, defaults to auto-detect (headless if no display)
-_headless_env = os.environ.get('HEADLESS', '').lower()
-if _headless_env in ('true', '1', 'yes'):
-    HEADLESS_MODE = True
-elif _headless_env in ('false', '0', 'no'):
-    HEADLESS_MODE = False
-else:
-    HEADLESS_MODE = not os.environ.get('DISPLAY')  # Auto-detect
+# HEADLESS_MODE set after env loading
 
 # Available models for benchmarking (vision-capable)
 # Format: (model_id, name, approx_cost_per_1M_tokens input/output)
@@ -315,7 +308,10 @@ LOCAL_TZ = pytz.timezone(TIMEZONE)
 LATITUDE = float(os.environ.get("LATITUDE", "0"))
 LONGITUDE = float(os.environ.get("LONGITUDE", "0"))
 LOCALE = os.environ.get("LOCALE", "en-US")
-MARKETPLACE_LOCATION = os.environ.get("MARKETPLACE_LOCATION", "melbourne")  # Facebook marketplace city slug
+# Multiple cities supported - comma separated (e.g., "perth,melbourne,sydney")
+_locations_str = os.environ.get("MARKETPLACE_LOCATIONS", os.environ.get("MARKETPLACE_LOCATION", "melbourne"))
+MARKETPLACE_LOCATIONS = [loc.strip() for loc in _locations_str.split(",") if loc.strip()]
+CURRENT_CITY = MARKETPLACE_LOCATIONS[0]  # Will be updated when looping through cities
 
 # Scheduler config (all configurable via environment)
 SCHEDULER_RUNS_PER_DAY = int(os.environ.get("RUNS_PER_DAY", "12"))
@@ -330,6 +326,15 @@ MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "70"))  # Minimum AI con
 # Scraping settings
 DEFAULT_LISTING_COUNT = int(os.environ.get("LISTING_COUNT", "20"))  # Default listings per run
 LISTING_COUNT = args.count if args.count is not None else DEFAULT_LISTING_COUNT
+
+# Headless mode: configurable via env, defaults to auto-detect (headless if no display)
+_headless_env = os.environ.get('HEADLESS', '').lower()
+if _headless_env in ('true', '1', 'yes'):
+    HEADLESS_MODE = True
+elif _headless_env in ('false', '0', 'no'):
+    HEADLESS_MODE = False
+else:
+    HEADLESS_MODE = not os.environ.get('DISPLAY')  # Auto-detect
 
 
 def init_database():
@@ -1649,7 +1654,7 @@ async def run_benchmark_mode():
         await context.add_cookies(FB_COOKIES)
         page = await context.new_page()
 
-        await page.goto(f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query=office%20chair",
+        await page.goto(f"https://www.facebook.com/marketplace/{CURRENT_CITY}/search?query=office%20chair",
                        wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(3000)
 
@@ -2031,7 +2036,7 @@ async def main():
         async def browse_decoy(query):
             print(f"\n🎭 Browsing '{query}' (decoy)...")
             await page.goto(
-                f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query={query.replace(' ', '%20')}",
+                f"https://www.facebook.com/marketplace/{CURRENT_CITY}/search?query={query.replace(' ', '%20')}",
                 wait_until="domcontentloaded", timeout=60000
             )
             await page.wait_for_timeout(random.uniform(2000, 4000))
@@ -2102,7 +2107,7 @@ async def main():
             # This is a real chair search - collect listings
             print(f"\n🔍 Searching for '{query}'...")
             await page.goto(
-                f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query={query.replace(' ', '%20')}",
+                f"https://www.facebook.com/marketplace/{CURRENT_CITY}/search?query={query.replace(' ', '%20')}",
                 wait_until="domcontentloaded", timeout=60000
             )
             await page.wait_for_timeout(random.uniform(2500, 5000))
@@ -2169,8 +2174,8 @@ async def main():
             if is_test_mode:
                 test_chair = random.choice(TEST_HERMAN_MILLER_IMAGES)
                 print(f"  🧪 TEST MODE ACTIVATED (1/{TEST_MODE_CHANCE} chance)")
-                print(f"     Swapping image with real {test_chair['model']} photo")
-                print(f"     (Simulating: someone listed a {test_chair['model']} as 'office chair')")
+                print(f"     Swapping image with test Herman Miller photo")
+                print(f"     (Simulating: someone listed a Herman Miller as '{test_chair.get('title', 'office chair')}')")
 
             try:
                 # Navigate to listing page
@@ -2417,8 +2422,8 @@ def run_scheduler():
             print(f"🔍 Starting scan #{run_count} at {local_now.strftime('%Y-%m-%d %H:%M:%S')} {TIMEZONE}")
             print(f"{'=' * 60}")
 
-            # Run the main scan
-            asyncio.run(main())
+            # Run the main scan (all cities)
+            asyncio.run(run_all_cities())
 
         except Exception as e:
             print(f"\n❌ Error during scan: {e}")
@@ -2435,6 +2440,29 @@ def run_scheduler():
         time.sleep(delay)
 
 
+async def run_all_cities():
+    """Run main() for each configured city."""
+    global CURRENT_CITY
+
+    print(f"🌍 Scanning {len(MARKETPLACE_LOCATIONS)} city/cities: {', '.join(MARKETPLACE_LOCATIONS)}")
+
+    for i, city in enumerate(MARKETPLACE_LOCATIONS):
+        CURRENT_CITY = city
+
+        if len(MARKETPLACE_LOCATIONS) > 1:
+            print(f"\n{'=' * 60}")
+            print(f"📍 City {i + 1}/{len(MARKETPLACE_LOCATIONS)}: {city.upper()}")
+            print(f"{'=' * 60}")
+
+            # Delay between cities in prod mode
+            if i > 0 and not DEV_MODE:
+                delay = random.uniform(30, 90)
+                print(f"⏳ Waiting {delay:.0f}s before next city...")
+                await asyncio.sleep(delay)
+
+        await main()
+
+
 if __name__ == "__main__":
     if args.scheduler:
         run_scheduler()
@@ -2445,6 +2473,6 @@ if __name__ == "__main__":
             print("❌ Another instance is already running. Exiting.")
             sys.exit(1)
         try:
-            asyncio.run(main())
+            asyncio.run(run_all_cities())
         finally:
             release_lock(lock_fd)

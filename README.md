@@ -133,7 +133,7 @@ All settings go in your `.env` file. Only the API keys and cookies are required 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MARKETPLACE_LOCATION` | `melbourne` | City slug from Facebook URL |
+| `MARKETPLACE_LOCATIONS` | `melbourne` | City slugs - comma separated for multiple (e.g., `perth,melbourne,sydney`) |
 | `TIMEZONE` | `UTC` | Your timezone for scheduler |
 | `LATITUDE` | `0` | Your latitude (for browser geolocation) |
 | `LONGITUDE` | `0` | Your longitude |
@@ -144,6 +144,8 @@ To find your marketplace slug, go to Facebook Marketplace in your city and look 
 facebook.com/marketplace/SLUG/search
                          ^^^^
 ```
+
+Multiple cities are scanned one after another. In prod mode, there's a 30-90s delay between cities.
 
 ### Scheduler
 

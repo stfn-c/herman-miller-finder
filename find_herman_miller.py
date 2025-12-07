@@ -53,8 +53,14 @@ BENCHMARK_MODE = args.benchmark
 # LISTING_COUNT set later after env is loaded
 TEST_MODE_CHANCE = 15   # 1 in X chance to trigger test mode during normal run
 
-# Headless mode: auto-detect if no display available (server mode)
-HEADLESS_MODE = not os.environ.get('DISPLAY')
+# Headless mode: configurable via env, defaults to auto-detect (headless if no display)
+_headless_env = os.environ.get('HEADLESS', '').lower()
+if _headless_env in ('true', '1', 'yes'):
+    HEADLESS_MODE = True
+elif _headless_env in ('false', '0', 'no'):
+    HEADLESS_MODE = False
+else:
+    HEADLESS_MODE = not os.environ.get('DISPLAY')  # Auto-detect
 
 # Available models for benchmarking (vision-capable)
 # Format: (model_id, name, approx_cost_per_1M_tokens input/output)

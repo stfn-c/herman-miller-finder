@@ -162,6 +162,14 @@ facebook.com/marketplace/SLUG/search
 
 Set `MIN_DEAL_SCORE=6` to only get notified about great deals or better.
 
+### Browser
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `HEADLESS` | auto | `true` = invisible browser, `false` = show browser window |
+
+By default it auto-detects: headless on servers, visible on desktop.
+
 ---
 
 ## Finding Your Location

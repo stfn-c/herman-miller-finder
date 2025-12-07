@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Herman Miller Chair Finder
-Uses Playwright to scrape Facebook Marketplace for office chairs in Perth,
+Uses Playwright to scrape Facebook Marketplace for office chairs,
 uses Claude Opus 4.5 via OpenRouter to identify Herman Miller chairs,
 and sends email alerts for matches.
 
@@ -42,7 +42,7 @@ parser.add_argument('--dev', action='store_true', help='Dev mode (faster delays,
 parser.add_argument('--verbose', '-v', action='store_true', help='Verbose logging')
 parser.add_argument('--quiet', '-q', action='store_true', help='Minimal logging')
 parser.add_argument('--count', '-n', type=int, default=20, help='Number of listings to check (default: 20)')
-parser.add_argument('--scheduler', action='store_true', help='Run as scheduler (12x/day, 9am-2am Perth time)')
+parser.add_argument('--scheduler', action='store_true', help='Run as scheduler (12x/day, 9am-2am local time)')
 args = parser.parse_args()
 
 # Mode config (can be overridden by CLI args)
@@ -303,12 +303,17 @@ DB_PATH = OUTPUT_DIR / "found_listings.db"
 # Lock file to ensure only one browser instance runs at a time
 LOCK_FILE = OUTPUT_DIR / ".hm_finder.lock"
 
-# Perth timezone for scheduler
-PERTH_TZ = pytz.timezone('Australia/Perth')
+# Timezone and location for scheduler and browser (configurable via environment)
+TIMEZONE = os.environ.get("TIMEZONE", "UTC")
+LOCAL_TZ = pytz.timezone(TIMEZONE)
+LATITUDE = float(os.environ.get("LATITUDE", "0"))
+LONGITUDE = float(os.environ.get("LONGITUDE", "0"))
+LOCALE = os.environ.get("LOCALE", "en-US")
+MARKETPLACE_LOCATION = os.environ.get("MARKETPLACE_LOCATION", "melbourne")  # Facebook marketplace city slug
 
-# Scheduler config: 12 runs per day, only during waking hours (9am-2am Perth)
+# Scheduler config: 12 runs per day, only during waking hours (9am-2am local time)
 SCHEDULER_RUNS_PER_DAY = 12
-SCHEDULER_START_HOUR = 9   # 9am Perth
+SCHEDULER_START_HOUR = 9   # 9am local
 SCHEDULER_END_HOUR = 26    # 2am next day (26 = 24 + 2)
 
 
@@ -841,7 +846,7 @@ def send_email_alert(listings):
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #333;">🪑 Premium Chairs Found!</h1>
-        <p>Found {len(listings)} premium chair(s) on Facebook Marketplace Perth:</p>
+        <p>Found {len(listings)} premium chair(s) on Facebook Marketplace:</p>
         {''.join(html_items)}
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
         <p style="color: #666; font-size: 12px;">Deal Score Guide: 🔥 FUMBLE (10) = &lt;15% retail | 💎 STEAL (8-9) = &lt;25% | 🎯 GREAT (6-7) = &lt;40% | 👍 GOOD (4-5) = &lt;60%</p>
@@ -1617,8 +1622,8 @@ async def run_benchmark_mode():
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            locale="en-AU",
-            timezone_id="Australia/Perth",
+            locale=LOCALE,
+            timezone_id=TIMEZONE,
         )
 
         await context.add_init_script("""
@@ -1629,7 +1634,7 @@ async def run_benchmark_mode():
         await context.add_cookies(FB_COOKIES)
         page = await context.new_page()
 
-        await page.goto("https://www.facebook.com/marketplace/perth/search?query=office%20chair",
+        await page.goto(f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query=office%20chair",
                        wait_until="domcontentloaded", timeout=60000)
         await page.wait_for_timeout(3000)
 
@@ -1886,9 +1891,9 @@ async def main():
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            locale="en-AU",
-            timezone_id="Australia/Perth",
-            geolocation={"latitude": -31.9505, "longitude": 115.8605},  # Perth
+            locale=LOCALE,
+            timezone_id=TIMEZONE,
+            geolocation={"latitude": LATITUDE, "longitude": LONGITUDE},
             permissions=["geolocation"],
             color_scheme="light",
             device_scale_factor=2,
@@ -2011,7 +2016,7 @@ async def main():
         async def browse_decoy(query):
             print(f"\n🎭 Browsing '{query}' (decoy)...")
             await page.goto(
-                f"https://www.facebook.com/marketplace/perth/search?query={query.replace(' ', '%20')}",
+                f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query={query.replace(' ', '%20')}",
                 wait_until="domcontentloaded", timeout=60000
             )
             await page.wait_for_timeout(random.uniform(2000, 4000))
@@ -2082,7 +2087,7 @@ async def main():
             # This is a real chair search - collect listings
             print(f"\n🔍 Searching for '{query}'...")
             await page.goto(
-                f"https://www.facebook.com/marketplace/perth/search?query={query.replace(' ', '%20')}",
+                f"https://www.facebook.com/marketplace/{MARKETPLACE_LOCATION}/search?query={query.replace(' ', '%20')}",
                 wait_until="domcontentloaded", timeout=60000
             )
             await page.wait_for_timeout(random.uniform(2500, 5000))
@@ -2333,9 +2338,9 @@ def release_lock(lock_fd):
 
 
 def is_within_active_hours():
-    """Check if current Perth time is within active hours (9am-2am)."""
-    perth_now = datetime.now(PERTH_TZ)
-    hour = perth_now.hour
+    """Check if current local time is within active hours (9am-2am)."""
+    local_now = datetime.now(LOCAL_TZ)
+    hour = local_now.hour
     # Active hours: 9am (9) to 2am (2 next day)
     # This means: 9-23 is OK, 0-1 is OK (early morning), 2-8 is NOT OK
     return hour >= SCHEDULER_START_HOUR or hour < (SCHEDULER_END_HOUR - 24)
@@ -2361,21 +2366,21 @@ def run_scheduler():
     print("=" * 60)
     print("🕐 Herman Miller Finder - Scheduler Mode")
     print(f"   Runs: {SCHEDULER_RUNS_PER_DAY}x per day")
-    print(f"   Active hours: {SCHEDULER_START_HOUR}:00 - {SCHEDULER_END_HOUR - 24}:00 Perth time")
+    print(f"   Active hours: {SCHEDULER_START_HOUR}:00 - {SCHEDULER_END_HOUR - 24}:00 ({TIMEZONE})")
     print("=" * 60)
 
     run_count = 0
 
     while True:
-        perth_now = datetime.now(PERTH_TZ)
+        local_now = datetime.now(LOCAL_TZ)
 
         if not is_within_active_hours():
-            # Calculate time until 9am Perth
-            if perth_now.hour >= (SCHEDULER_END_HOUR - 24) and perth_now.hour < SCHEDULER_START_HOUR:
-                hours_until_active = SCHEDULER_START_HOUR - perth_now.hour
-                sleep_seconds = hours_until_active * 3600 - perth_now.minute * 60
-                print(f"\n😴 Outside active hours ({perth_now.strftime('%H:%M')} Perth)")
-                print(f"   Sleeping until 9:00 AM Perth ({hours_until_active:.1f}h)...")
+            # Calculate time until 9am local
+            if local_now.hour >= (SCHEDULER_END_HOUR - 24) and local_now.hour < SCHEDULER_START_HOUR:
+                hours_until_active = SCHEDULER_START_HOUR - local_now.hour
+                sleep_seconds = hours_until_active * 3600 - local_now.minute * 60
+                print(f"\n😴 Outside active hours ({local_now.strftime('%H:%M')} {TIMEZONE})")
+                print(f"   Sleeping until 9:00 AM ({hours_until_active:.1f}h)...")
                 time.sleep(max(60, sleep_seconds))
                 continue
 
@@ -2389,7 +2394,7 @@ def run_scheduler():
         try:
             run_count += 1
             print(f"\n{'=' * 60}")
-            print(f"🔍 Starting scan #{run_count} at {perth_now.strftime('%Y-%m-%d %H:%M:%S')} Perth")
+            print(f"🔍 Starting scan #{run_count} at {local_now.strftime('%Y-%m-%d %H:%M:%S')} {TIMEZONE}")
             print(f"{'=' * 60}")
 
             # Run the main scan
@@ -2402,10 +2407,10 @@ def run_scheduler():
 
         # Calculate next run time
         delay = get_next_run_delay()
-        next_run = datetime.now(PERTH_TZ).timestamp() + delay
-        next_run_time = datetime.fromtimestamp(next_run, PERTH_TZ)
+        next_run = datetime.now(LOCAL_TZ).timestamp() + delay
+        next_run_time = datetime.fromtimestamp(next_run, LOCAL_TZ)
 
-        print(f"\n⏰ Next scan at {next_run_time.strftime('%H:%M:%S')} Perth")
+        print(f"\n⏰ Next scan at {next_run_time.strftime('%H:%M:%S')} {TIMEZONE}")
         print(f"   (sleeping {delay/60:.0f} minutes)")
         time.sleep(delay)
 

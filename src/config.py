@@ -236,7 +236,7 @@ def calculate_deal_score(listing_price, chair_model):
 # Load from environment variables (use .env file or export them)
 def _load_env_file():
     """Load environment variables from .env file if it exists."""
-    env_path = Path(__file__).parent / ".env"
+    env_path = Path(__file__).parent.parent / ".env"
     if env_path.exists():
         with open(env_path) as f:
             for line in f:
@@ -267,7 +267,7 @@ except json.JSONDecodeError:
     FB_COOKIES = []
 
 # Output directory (relative to script location)
-SCRIPT_DIR = Path(__file__).parent.resolve()
+SCRIPT_DIR = Path(__file__).parent.parent.resolve()
 OUTPUT_DIR = SCRIPT_DIR / "found_chairs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

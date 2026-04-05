@@ -1,7 +1,7 @@
 """Email alerting: send_email_alert with HTML generation."""
 
 import requests
-from config import RESEND_API_KEY, FROM_EMAIL, TO_EMAIL
+from src.config import RESEND_API_KEY, FROM_EMAIL, TO_EMAIL
 
 
 def send_email_alert(listings):

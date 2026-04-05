@@ -4,9 +4,9 @@ import asyncio
 import base64
 import requests
 from datetime import datetime
-from config import DEFAULT_MODEL
-from analyzer import analyze_image_with_claude, save_herman_miller_listing
-from email_alert import send_email_alert
+from src.config import DEFAULT_MODEL
+from src.analyzer import analyze_image_with_claude, save_herman_miller_listing
+from src.email_alert import send_email_alert
 
 # Real Herman Miller chair images for testing
 # Mix of Reddit/FB Marketplace finds + official product photos

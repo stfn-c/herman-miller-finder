@@ -7,8 +7,8 @@ import asyncio
 import requests
 from datetime import datetime
 from playwright.async_api import async_playwright
-import config
-from config import (
+import src.config as config
+from src.config import (
     HEADLESS_MODE,
     LOCALE,
     TIMEZONE,
@@ -29,15 +29,15 @@ from config import (
     MARKETPLACE_LOCATIONS,
     calculate_deal_score,
 )
-from database import (
+from src.database import (
     is_listing_known,
     save_listing_to_db,
     mark_listing_alerted,
     get_listing_stats,
 )
-from analyzer import analyze_image_with_claude, save_herman_miller_listing
-from email_alert import send_email_alert
-from test_mode import TEST_HERMAN_MILLER_IMAGES
+from src.analyzer import analyze_image_with_claude, save_herman_miller_listing
+from src.email_alert import send_email_alert
+from src.test_mode import TEST_HERMAN_MILLER_IMAGES
 
 
 async def run_facebook_scraper():

@@ -9,8 +9,8 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from playwright.async_api import async_playwright
-import config
-from config import (
+import src.config as config
+from src.config import (
     HEADLESS_MODE,
     LOCALE,
     TIMEZONE,
@@ -19,8 +19,8 @@ from config import (
     OUTPUT_DIR,
     VERBOSE_LOGGING,
 )
-from analyzer import analyze_image_with_model, analyze_single_model
-from test_mode import TEST_HERMAN_MILLER_IMAGES, TEST_OTHER_PREMIUM_CHAIRS
+from src.analyzer import analyze_image_with_model, analyze_single_model
+from src.test_mode import TEST_HERMAN_MILLER_IMAGES, TEST_OTHER_PREMIUM_CHAIRS
 
 # Available models for benchmarking (vision-capable)
 # Format: (model_id, name, approx_cost_per_1M_tokens input/output)

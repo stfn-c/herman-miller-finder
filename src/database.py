@@ -2,7 +2,7 @@
 
 import sqlite3
 from datetime import datetime
-from config import DB_PATH
+from src.config import DB_PATH
 
 
 def init_database():

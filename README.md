@@ -84,7 +84,7 @@ The tool needs your Facebook session cookies. There's a script to grab them:
 
 6. Copy the `FB_COOKIES=...` line into your `.env` file
 
-Or copy the contents of `export_cookies.js` and paste that instead - same thing.
+Or copy the contents of `scripts/export_cookies.js` and paste that instead - same thing.
 
 ---
 

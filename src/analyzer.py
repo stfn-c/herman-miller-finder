@@ -7,7 +7,7 @@ import random
 import re
 import requests
 from datetime import datetime
-from config import (
+from src.config import (
     OPENROUTER_API_KEY,
     VERBOSE_LOGGING,
     DEFAULT_MODEL,

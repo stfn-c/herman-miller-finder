@@ -17,11 +17,15 @@ Usage:
 
 import sys
 import asyncio
-from config import args, PURE_TEST_MODE, BENCHMARK_MODE
-from benchmark import list_benchmark_runs, compare_benchmark_runs, run_benchmark_mode
-from test_mode import run_pure_test_mode
-from scraper import run_facebook_scraper, run_all_cities
-from scheduler import run_scheduler, acquire_lock, release_lock
+from src.config import args, PURE_TEST_MODE, BENCHMARK_MODE
+from src.benchmark import (
+    list_benchmark_runs,
+    compare_benchmark_runs,
+    run_benchmark_mode,
+)
+from src.test_mode import run_pure_test_mode
+from src.scraper import run_facebook_scraper, run_all_cities
+from src.scheduler import run_scheduler, acquire_lock, release_lock
 
 
 async def main():

@@ -7,7 +7,7 @@ import fcntl
 import random
 import asyncio
 from datetime import datetime
-from config import (
+from src.config import (
     LOCAL_TZ,
     TIMEZONE,
     LOCK_FILE,

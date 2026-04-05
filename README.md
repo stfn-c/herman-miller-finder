@@ -2,14 +2,15 @@
 
 People sell Herman Miller chairs on Facebook Marketplace all the time without knowing what they have. I got tired of missing out on $200 Aerons, so I built this.
 
-It scans Marketplace, uses AI to identify Herman Miller chairs from photos, and emails you when it finds one.
+It scans Marketplace, uses AI vision to identify Herman Miller chairs from photos, scores the deal against retail, and emails you.
 
 ## How It Works
 
-1. Scrapes Facebook Marketplace for office chair listings
-2. AI analyzes each photo to identify Herman Miller chairs
-3. Calculates how good the deal is compared to retail price
-4. Emails you the good ones
+1. [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) (stealth Chromium) scrapes Facebook Marketplace
+2. AI analyzes each listing photo for Herman Miller chairs
+3. Calculates deal score against retail price
+4. Emails you the finds via [Resend](https://resend.com)
+5. SQLite cache ensures no listing is ever processed twice
 
 ## Deal Scores
 
@@ -22,7 +23,24 @@ It scans Marketplace, uses AI to identify Herman Miller chairs from photos, and 
 | 2-3 | FAIR - nothing special |
 | 0-1 | PASS - retail or overpriced |
 
-Recognizes: Aeron, Embody, Sayl, Mirra, Cosm, Setu, Eames, Celle, Lino, and more.
+Recognizes: Aeron, Embody, Sayl, Mirra, Cosm, and more.
+
+## Project Structure
+
+```
+find_herman_miller.py           # Entry point + CLI
+src/
+  config.py                     # Env loading, constants, CLI args
+  scraper.py                    # CloakBrowser + Facebook scraping
+  analyzer.py                   # AI image analysis (Anthropic / OpenRouter)
+  database.py                   # SQLite listing cache + stats
+  email_alert.py                # Resend email alerts
+  benchmark.py                  # Multi-model accuracy benchmarking
+  test_mode.py                  # Test images + test runner
+  scheduler.py                  # Cron-like scheduler + lock management
+scripts/
+  export_cookies.js             # Browser console script to grab FB cookies
+```
 
 ---
 
@@ -31,8 +49,10 @@ Recognizes: Aeron, Embody, Sayl, Mirra, Cosm, Setu, Eames, Celle, Lino, and more
 ### Requirements
 
 - Python 3.8+
-- [OpenRouter](https://openrouter.ai) account (for AI - has free tier)
-- [Resend](https://resend.com) account (for emails - has free tier)
+- One of:
+  - [Anthropic](https://console.anthropic.com) API key (direct Claude access)
+  - [OpenRouter](https://openrouter.ai) API key (multi-model, has free tier)
+- [Resend](https://resend.com) account (for email alerts - has free tier)
 - Facebook account
 
 ### Install
@@ -40,13 +60,10 @@ Recognizes: Aeron, Embody, Sayl, Mirra, Cosm, Setu, Eames, Celle, Lino, and more
 ```
 git clone https://github.com/stfn-c/herman-miller-finder.git
 cd herman-miller-finder
-python3 -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium
 ```
 
-Windows: use `venv\Scripts\activate` instead.
+CloakBrowser downloads its Chromium binary automatically on first run.
 
 ### Configure
 
@@ -54,166 +71,97 @@ Windows: use `venv\Scripts\activate` instead.
 cp .env.example .env
 ```
 
-Edit `.env` with your settings. See [Configuration](#configuration) below for all options.
+Edit `.env` with your settings. See [Configuration](#configuration) below.
 
 ### Get Facebook Cookies
 
-The tool needs your Facebook session cookies. There's a script to grab them:
-
 1. Go to [facebook.com](https://facebook.com) in Chrome
 2. Make sure you're logged in
-3. Press `F12` to open DevTools
-4. Click the **Console** tab at the top
-5. Paste this and hit Enter:
-
-```javascript
-(function() {
-    const cookieNames = ['datr', 'sb', 'c_user', 'xs', 'fr', 'locale'];
-    const cookies = [];
-    document.cookie.split(';').forEach(cookie => {
-        const [name, value] = cookie.trim().split('=');
-        if (cookieNames.includes(name)) {
-            cookies.push({name: name, value: value, domain: '.facebook.com', path: '/'});
-        }
-    });
-    const output = 'FB_COOKIES=' + JSON.stringify(cookies);
-    console.log('\n' + output + '\n');
-    try { navigator.clipboard.writeText(output); console.log('Copied to clipboard!'); } catch(e) {}
-})();
-```
-
-6. Copy the `FB_COOKIES=...` line into your `.env` file
-
-Or copy the contents of `scripts/export_cookies.js` and paste that instead - same thing.
+3. Press `F12` > **Console** tab
+4. Paste the contents of `scripts/export_cookies.js` and hit Enter
+5. Copy the `FB_COOKIES=...` line into your `.env` file
 
 ---
 
 ## Usage
 
-### Dev mode (default)
-
-Fast scanning, minimal delays. Good for testing:
-
 ```
-python find_herman_miller.py
+python find_herman_miller.py                     # dev mode (fast)
+python find_herman_miller.py --prod              # prod mode (human-like delays + decoy searches)
+python find_herman_miller.py --prod --scheduler  # run 12x/day on schedule
+python find_herman_miller.py --backend anthropic # use Anthropic API directly
+python find_herman_miller.py -n 50               # check 50 listings
+python find_herman_miller.py --test              # test mode (sample images, no Facebook)
+python find_herman_miller.py --benchmark         # compare AI models
 ```
-
-### Prod mode
-
-Slower, human-like behavior. Use this for real runs to avoid detection:
-
-```
-python find_herman_miller.py --prod
-```
-
-Prod mode adds:
-- Longer delays between actions
-- More scrolling to load listings
-- Decoy searches (random non-chair searches)
-- Random pauses and mouse movements
-
-### Run on schedule
-
-Runs automatically throughout the day. Combine with `--prod` for production:
-
-```
-python find_herman_miller.py --prod --scheduler
-```
-
-This checks 12x/day (configurable) between 9am-2am in your timezone.
-
-### Options
 
 | Flag | What it does |
 |------|--------------|
-| `--prod` | Production mode - slower, human-like delays |
-| `--scheduler` | Run continuously (12x/day by default) |
-| `-n 50` | Check 50 listings instead of default 20 |
-| `--test` | Test mode - uses sample images, no Facebook |
-| `--verbose` | Show detailed output |
-| `--benchmark` | Compare different AI models |
+| `--prod` | Slower, human-like delays + decoy searches |
+| `--scheduler` | Run continuously (12x/day, 9am-2am) |
+| `--backend` | `openrouter` (default) or `anthropic` |
+| `-n NUM` | Number of listings to check (default: 20) |
+| `--test` | Test with sample images, no Facebook |
+| `--benchmark` | Compare AI model accuracy |
+| `--verbose` | Detailed output |
 
 ---
 
 ## Configuration
 
-All settings go in your `.env` file. Only the API keys and cookies are required - everything else has defaults.
+All settings in `.env`. Only API keys + cookies are required.
 
-### Required
-
-| Setting | Description |
-|---------|-------------|
-| `OPENROUTER_API_KEYS` | Your OpenRouter API key |
-| `RESEND_API_KEY` | Your Resend API key |
-| `FROM_EMAIL` | Sender email (verify domain in Resend) |
-| `TO_EMAIL` | Where to send alerts |
-| `FB_COOKIES` | Facebook session cookies (see above) |
-
-### Location
+### AI Backend
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MARKETPLACE_LOCATIONS` | `melbourne` | City slugs - comma separated for multiple (e.g., `perth,melbourne,sydney`) |
-| `TIMEZONE` | `UTC` | Your timezone for scheduler |
-| `LATITUDE` | `0` | Your latitude (for browser geolocation) |
-| `LONGITUDE` | `0` | Your longitude |
-| `LOCALE` | `en-US` | Browser locale |
-
-To find your marketplace slug, go to Facebook Marketplace in your city and look at the URL:
-```
-facebook.com/marketplace/SLUG/search
-                         ^^^^
-```
-
-Multiple cities are scanned one after another. In prod mode, there's a 30-90s delay between cities.
-
-### Scheduler
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `RUNS_PER_DAY` | `12` | How many times to scan per day |
-| `START_HOUR` | `9` | Start scanning at this hour (24h) |
-| `END_HOUR` | `2` | Stop scanning at this hour (2 = 2am) |
+| `AI_BACKEND` | `openrouter` | `openrouter` or `anthropic` |
+| `OPENROUTER_API_KEYS` | - | OpenRouter API key(s), comma-separated |
+| `ANTHROPIC_API_KEY` | - | Anthropic API key (only if backend=anthropic) |
+| `AI_MODEL` | `anthropic/claude-opus-4` | Model ID for analysis |
 
 ### Alerts
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| `RESEND_API_KEY` | - | Resend API key |
+| `FROM_EMAIL` | - | Sender email (verify domain in Resend) |
+| `TO_EMAIL` | - | Where to send alerts |
 | `MIN_DEAL_SCORE` | `0` | Only alert for deals >= this score (0-10) |
-| `LISTING_COUNT` | `20` | How many listings to check per run |
 
-Set `MIN_DEAL_SCORE=6` to only get notified about great deals or better.
+### Location
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MARKETPLACE_LOCATIONS` | `melbourne` | City slug(s), comma-separated |
+| `TIMEZONE` | `UTC` | Your timezone |
+| `LATITUDE` / `LONGITUDE` | `0` | Browser geolocation |
+| `LOCALE` | `en-US` | Browser locale |
+
+Find your marketplace slug from the URL: `facebook.com/marketplace/SLUG/search`
+
+### Scheduler
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `RUNS_PER_DAY` | `12` | Scans per day |
+| `START_HOUR` | `9` | Start hour (24h) |
+| `END_HOUR` | `2` | End hour (2 = 2am next day) |
 
 ### Browser
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `HEADLESS` | auto | `true` = invisible browser, `false` = show browser window |
-
-By default it auto-detects: headless on servers, visible on desktop.
-
----
-
-## Finding Your Location
-
-### Timezone
-
-Use a [tz database name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones):
-- `America/New_York`
-- `America/Los_Angeles`
-- `Europe/London`
-- `Australia/Sydney`
-
-### Coordinates
-
-Google your city + "coordinates" or use [latlong.net](https://www.latlong.net/).
+| `HEADLESS` | auto | `true` = invisible, `false` = show window |
+| `LISTING_COUNT` | `20` | Listings per run |
 
 ---
 
 ## Notes
 
-- Facebook cookies expire. If it stops working, grab fresh cookies.
-- Automated scraping probably violates Facebook's TOS. Your call.
+- Facebook cookies expire. Grab fresh ones if scraping stops working.
+- A persistent browser profile (`.fb_profile/`) is maintained across runs so Facebook sees a consistent browser identity.
+- All processed listings are cached in SQLite - re-runs skip already-seen listings.
 
 ## License
 

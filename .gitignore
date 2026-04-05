@@ -51,8 +51,10 @@ found_chairs/
 *.sqlite
 *.sqlite3
 
-# Playwright
+# Browser
 playwright/.cache/
+.fb_profile/
 
 # Logs
 *.log
+.vercel

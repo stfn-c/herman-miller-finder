@@ -6,7 +6,7 @@ import base64
 import asyncio
 import requests
 from datetime import datetime
-from playwright.async_api import async_playwright
+from cloakbrowser import launch_persistent_context_async
 import src.config as config
 from src.config import (
     HEADLESS_MODE,
@@ -31,6 +31,7 @@ from src.config import (
 )
 from src.database import (
     is_listing_known,
+    mark_listing_seen,
     save_listing_to_db,
     mark_listing_alerted,
     get_listing_stats,
@@ -50,93 +51,22 @@ async def run_facebook_scraper():
 
     herman_millers = []
 
-    async with async_playwright() as p:
-        # Launch browser with anti-detection measures
-        print("\n\U0001f310 Launching browser...")
+    profile_dir = str(config.SCRIPT_DIR / ".fb_profile")
+    print("\n\U0001f310 Launching CloakBrowser...")
 
-        # Use a real Chrome installation path if available, otherwise use Playwright's
-        browser = await p.chromium.launch(
-            headless=HEADLESS_MODE,
-            args=[
-                "--disable-blink-features=AutomationControlled",  # Hide automation
-                "--disable-infobars",  # No "Chrome is being controlled" bar
-                "--disable-dev-shm-usage",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-popup-blocking",
-                "--no-sandbox",  # Required for running as root/in containers
-            ],
-        )
+    context = await launch_persistent_context_async(
+        profile_dir,
+        headless=HEADLESS_MODE,
+        humanize=True,
+        locale=LOCALE,
+        timezone_id=TIMEZONE,
+        geolocation={"latitude": LATITUDE, "longitude": LONGITUDE},
+        permissions=["geolocation"],
+        color_scheme="light",
+        viewport={"width": 1280, "height": 900},
+    )
 
-        # Create context with realistic settings
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            locale=LOCALE,
-            timezone_id=TIMEZONE,
-            geolocation={"latitude": LATITUDE, "longitude": LONGITUDE},
-            permissions=["geolocation"],
-            color_scheme="light",
-            device_scale_factor=2,
-        )
-
-        # Remove webdriver property and other automation markers
-        await context.add_init_script("""
-            // Remove webdriver flag
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-
-            // Remove automation-related properties
-            delete navigator.__proto__.webdriver;
-
-            // Fix plugins (headless Chrome has empty plugins)
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin' },
-                ]
-            });
-
-            // Fix languages
-            Object.defineProperty(navigator, 'languages', {
-                get: () => ['en-AU', 'en-GB', 'en-US', 'en']
-            });
-
-            // Fix platform
-            Object.defineProperty(navigator, 'platform', {
-                get: () => 'MacIntel'
-            });
-
-            // Fix hardware concurrency (common value)
-            Object.defineProperty(navigator, 'hardwareConcurrency', {
-                get: () => 8
-            });
-
-            // Fix device memory
-            Object.defineProperty(navigator, 'deviceMemory', {
-                get: () => 8
-            });
-
-            // Remove Playwright/Puppeteer markers from window
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-
-            // Make chrome object look real
-            window.chrome = {
-                runtime: {},
-                loadTimes: function() {},
-                csi: function() {},
-                app: {}
-            };
-        """)
-
-        # Add cookies
+    try:
         await context.add_cookies(FB_COOKIES)
 
         page = await context.new_page()
@@ -498,8 +428,11 @@ async def run_facebook_scraper():
                     print(f"\n  \u26a0\ufe0f No image found on this listing")
 
             except Exception as e:
-                print(f"\n  \u274c Error processing listing: {e}")
+                print(f"\n  ❌ Error processing listing: {e}")
+                mark_listing_seen(listing["id"])
                 continue
+
+            mark_listing_seen(listing["id"])
 
             # Rate limiting - random delay to seem more human
             wait_time = random.uniform(LISTING_DELAY_MIN, LISTING_DELAY_MAX)
@@ -515,7 +448,8 @@ async def run_facebook_scraper():
 
             await page.wait_for_timeout(wait_time)
 
-        await browser.close()
+    finally:
+        await context.close()
 
     # Send email alert (only for non-test finds unless EMAIL_TEST_FINDS is set)
     include_test = os.environ.get("EMAIL_TEST_FINDS", "").lower() in (

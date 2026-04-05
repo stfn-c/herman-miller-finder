@@ -24,6 +24,12 @@ def init_database():
             alerted_at TIMESTAMP
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS seen (
+            listing_id TEXT PRIMARY KEY,
+            seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -32,10 +38,22 @@ def is_listing_known(listing_id):
     """Check if we've already processed this listing."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM listings WHERE listing_id = ?", (listing_id,))
+    cursor.execute("SELECT 1 FROM seen WHERE listing_id = ?", (listing_id,))
     result = cursor.fetchone()
     conn.close()
     return result is not None
+
+
+def mark_listing_seen(listing_id):
+    """Mark a listing as processed so we never re-analyze it."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO seen (listing_id, seen_at) VALUES (?, ?)",
+        (listing_id, datetime.now()),
+    )
+    conn.commit()
+    conn.close()
 
 
 def save_listing_to_db(

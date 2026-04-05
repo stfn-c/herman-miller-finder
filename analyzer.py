@@ -1,4 +1,4 @@
-"""AI analysis: image analysis with OpenRouter models, response parsing, deal scoring."""
+"""AI analysis: image analysis via OpenRouter or Anthropic SDK, response parsing, deal scoring."""
 
 import json
 import time
@@ -7,7 +7,14 @@ import random
 import re
 import requests
 from datetime import datetime
-from config import OPENROUTER_API_KEY, VERBOSE_LOGGING, DEFAULT_MODEL, OUTPUT_DIR
+from config import (
+    OPENROUTER_API_KEY,
+    VERBOSE_LOGGING,
+    DEFAULT_MODEL,
+    OUTPUT_DIR,
+    AI_BACKEND,
+    ANTHROPIC_API_KEY,
+)
 
 
 def analyze_image_with_model(
@@ -265,8 +272,137 @@ Answer in JSON:
     }
 
 
+def _analyze_image_anthropic(
+    image_base64,
+    model_id="claude-sonnet-4-20250514",
+    listing_title="",
+    listing_price="",
+):
+    """Analyze image using the Anthropic Python SDK directly."""
+    try:
+        import anthropic
+    except ImportError:
+        print(
+            "      ERROR: 'anthropic' package not installed. Run: pip install anthropic"
+        )
+        return {
+            "error": True,
+            "reasoning": "anthropic package not installed",
+            "model": "None",
+            "is_herman_miller": False,
+        }
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    prompt_text = """Is this a Herman Miller chair?
+
+Herman Miller models:
+- AERON: Mesh with horizontal bands, curved figure-8 frame, PostureFit lumbar
+- EMBODY: Pixelated spine-like back
+- MIRRA: Butterfly-shaped frame
+- SAYL: Y-shaped suspension back
+- COSM: Continuous flowing frame
+
+Answer in JSON:
+{"reasoning":"why or why not","model":"Aeron|Embody|Mirra|Sayl|Cosm|None","confidence":"high|medium|low","is_herman_miller":true|false}"""
+
+    anthropic_model = model_id
+    if "/" in anthropic_model:
+        anthropic_model = anthropic_model.split("/")[-1]
+
+    max_retries = 3
+    base_delay = 5
+
+    for attempt in range(max_retries):
+        try:
+            response = client.messages.create(
+                model=anthropic_model,
+                max_tokens=4000,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_base64,
+                                },
+                            },
+                            {"type": "text", "text": prompt_text},
+                        ],
+                    }
+                ],
+            )
+
+            content = response.content[0].text.strip()
+
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+            content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", content)
+            json_match = re.search(r"\{[^{}]*\}", content, re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
+
+            parsed = json.loads(content)
+            if VERBOSE_LOGGING:
+                model_name = parsed.get("model", "Unknown")
+                is_hm = parsed.get("is_herman_miller", False)
+                print(
+                    f"      [anthropic] {anthropic_model}: {model_name} (is_hm={is_hm})"
+                )
+            return parsed
+
+        except json.JSONDecodeError:
+            return {
+                "reasoning": f"[PARSE ERROR] {content[:100]}",
+                "model": "None",
+                "confidence": "low",
+                "is_herman_miller": False,
+                "error": True,
+            }
+        except anthropic.RateLimitError:
+            if attempt < max_retries - 1:
+                delay = base_delay * (2**attempt)
+                print(f"      [anthropic] rate limited, retry in {delay}s...")
+                time.sleep(delay)
+                continue
+            return {
+                "error": True,
+                "reasoning": "Rate limited",
+                "model": "None",
+                "is_herman_miller": False,
+            }
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(base_delay)
+                continue
+            return {
+                "error": True,
+                "reasoning": str(e)[:100],
+                "model": "None",
+                "is_herman_miller": False,
+            }
+
+    return {
+        "error": True,
+        "reasoning": "Unknown error",
+        "model": "None",
+        "is_herman_miller": False,
+    }
+
+
 def analyze_image_with_claude(image_base64):
-    """Wrapper for backwards compatibility - uses configured model."""
+    """Route to configured backend - OpenRouter or Anthropic SDK."""
+    if AI_BACKEND == "anthropic":
+        return _analyze_image_anthropic(image_base64, DEFAULT_MODEL)
     return analyze_image_with_model(image_base64, DEFAULT_MODEL)
 
 

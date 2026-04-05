@@ -56,6 +56,12 @@ parser.add_argument(
     action="store_true",
     help="Run as scheduler (12x/day, 9am-2am local time)",
 )
+parser.add_argument(
+    "--backend",
+    choices=["openrouter", "anthropic"],
+    default=None,
+    help="AI backend: openrouter (default) or anthropic (uses ANTHROPIC_API_KEY)",
+)
 args = parser.parse_args()
 
 # Mode config (can be overridden by CLI args)
@@ -319,3 +325,10 @@ else:
 
 # Default model for analysis (configurable via env)
 DEFAULT_MODEL = os.environ.get("AI_MODEL", "anthropic/claude-opus-4")
+
+# Anthropic direct API key (for --backend anthropic)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# AI backend selection: CLI flag > env var > default (openrouter)
+_backend_env = os.environ.get("AI_BACKEND", "openrouter").lower()
+AI_BACKEND = args.backend or _backend_env  # CLI flag takes priority
